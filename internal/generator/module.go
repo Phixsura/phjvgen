@@ -18,17 +18,16 @@ func AddApplicationModule(moduleName string) error {
 		return fmt.Errorf("模块名称格式不正确，请使用小写字母和连字符")
 	}
 
-	// Check if we're in project root
-	if !utils.FileExists("pom.xml") {
-		return fmt.Errorf("未找到pom.xml文件，请在项目根目录运行此命令")
+	// Find project root
+	projectRoot, err := findProjectRoot()
+	if err != nil {
+		return fmt.Errorf("未找到项目根目录: %w\n提示: 请确保在包含pom.xml的项目目录或其子目录中运行此命令", err)
 	}
 
-	if !utils.DirExists("application") {
-		return fmt.Errorf("未找到application目录，请确认项目结构正确")
-	}
+	utils.PrintInfo(fmt.Sprintf("项目根目录: %s", projectRoot))
 
 	// Extract project info
-	config, err := extractProjectInfoFromPOM()
+	config, err := extractProjectInfoFromPOM(projectRoot)
 	if err != nil {
 		return err
 	}
@@ -39,7 +38,7 @@ func AddApplicationModule(moduleName string) error {
 	fmt.Printf("  Package: %s\n", config.PackageName)
 
 	// Check if module already exists
-	moduleDir := filepath.Join("application", "application-"+moduleName)
+	moduleDir := filepath.Join(projectRoot, "application", "application-"+moduleName)
 	if utils.DirExists(moduleDir) {
 		return fmt.Errorf("模块 application-%s 已存在", moduleName)
 	}
@@ -71,13 +70,13 @@ func AddApplicationModule(moduleName string) error {
 
 	// Update parent POM
 	utils.PrintInfo("更新父POM的modules声明...")
-	if err := updateParentPOMModules(moduleName); err != nil {
+	if err := updateParentPOMModules(projectRoot, moduleName); err != nil {
 		return err
 	}
 	utils.PrintSuccess("父POM modules更新完成")
 
 	utils.PrintInfo("更新父POM的dependencyManagement...")
-	if err := updateParentPOMDependencyManagement(config, moduleName); err != nil {
+	if err := updateParentPOMDependencyManagement(projectRoot, config, moduleName); err != nil {
 		return err
 	}
 	utils.PrintSuccess("父POM dependencyManagement更新完成")
@@ -99,7 +98,7 @@ func validateModuleName(name string) bool {
 }
 
 func createModuleStructure(config *ProjectConfig, moduleName string) error {
-	moduleDir := filepath.Join("application", "application-"+moduleName)
+	moduleDir := filepath.Join(config.OutputDir, "application", "application-"+moduleName)
 	pkgPath := config.PackagePath
 
 	// Convert module-name to module_name for package path (replace - with nothing for Java package)
@@ -126,12 +125,13 @@ func generateModulePOM(config *ProjectConfig, moduleName string) error {
 	replacements["{{MODULE_DESCRIPTION}}"] = moduleDescription
 
 	content := utils.ReplacePlaceholders(templates.ApplicationModulePOM, replacements)
-	moduleDir := filepath.Join("application", "application-"+moduleName)
+	moduleDir := filepath.Join(config.OutputDir, "application", "application-"+moduleName)
 	return utils.WriteFile(filepath.Join(moduleDir, "pom.xml"), content)
 }
 
-func updateParentPOMModules(moduleName string) error {
-	content, err := os.ReadFile("pom.xml")
+func updateParentPOMModules(projectRoot string, moduleName string) error {
+	pomPath := filepath.Join(projectRoot, "pom.xml")
+	content, err := os.ReadFile(pomPath)
 	if err != nil {
 		return err
 	}
@@ -155,11 +155,12 @@ func updateParentPOMModules(moduleName string) error {
 	newModule := fmt.Sprintf("        <module>application/application-%s</module>\n    ", moduleName)
 	newContent := pomContent[:modulesEnd] + newModule + pomContent[modulesEnd:]
 
-	return os.WriteFile("pom.xml", []byte(newContent), 0644)
+	return os.WriteFile(pomPath, []byte(newContent), 0644)
 }
 
-func updateParentPOMDependencyManagement(config *ProjectConfig, moduleName string) error {
-	content, err := os.ReadFile("pom.xml")
+func updateParentPOMDependencyManagement(projectRoot string, config *ProjectConfig, moduleName string) error {
+	pomPath := filepath.Join(projectRoot, "pom.xml")
+	content, err := os.ReadFile(pomPath)
 	if err != nil {
 		return err
 	}
@@ -197,7 +198,7 @@ func updateParentPOMDependencyManagement(config *ProjectConfig, moduleName strin
 
 	newContent := pomContent[:depEnd] + newDep + pomContent[depEnd:]
 
-	return os.WriteFile("pom.xml", []byte(newContent), 0644)
+	return os.WriteFile(pomPath, []byte(newContent), 0644)
 }
 
 func generateSampleService(config *ProjectConfig, moduleName string) error {
@@ -229,7 +230,7 @@ public class %sService {
 }
 `, config.PackageName, modulePackage, className, className, className, className)
 
-	moduleDir := filepath.Join("application", "application-"+moduleName)
+	moduleDir := filepath.Join(config.OutputDir, "application", "application-"+moduleName)
 	pkgPath := config.PackagePath
 	servicePath := filepath.Join(moduleDir, "src/main/java", pkgPath, "application", modulePackage, "service", className+"Service.java")
 

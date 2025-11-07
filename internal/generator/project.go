@@ -52,6 +52,13 @@ func GenerateProject(config *ProjectConfig) error {
 	}
 	utils.PrintSuccess(".gitignore生成完成")
 
+	// Generate demo code by default
+	utils.PrintInfo("生成完整CRUD示例代码...")
+	if err := generateDemoCodeForProject(config); err != nil {
+		return err
+	}
+	utils.PrintSuccess("完整CRUD示例代码生成完成")
+
 	return nil
 }
 
@@ -92,8 +99,10 @@ func createDirectoryStructure(config *ProjectConfig) error {
 		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/controller"),
 		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/request"),
 		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/response"),
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/assembler"),
 		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/interceptor"),
 		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/filter"),
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/config"),
 		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/advice"),
 		filepath.Join(baseDir, "adapter/adapter-rest/src/main/resources"),
 		filepath.Join(baseDir, "adapter/adapter-rest/src/test/java", pkgPath, "adapter/rest"),
@@ -109,6 +118,7 @@ func createDirectoryStructure(config *ProjectConfig) error {
 		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/dto"),
 		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/assembler"),
 		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/executor"),
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/listener"),
 		filepath.Join(baseDir, "application/application-user/src/main/resources"),
 		filepath.Join(baseDir, "application/application-user/src/test/java", pkgPath, "application/user"),
 
@@ -150,20 +160,15 @@ func generateModulePOMs(config *ProjectConfig) error {
 }
 
 func generateBasicSourceFiles(config *ProjectConfig) error {
+	// This function is now simplified as demo code generation will handle most files
+	// We only generate the starter Application class here as it's always needed
 	replacements := config.GetReplacements()
 	baseDir := config.OutputDir
 	pkgPath := config.PackagePath
 
 	files := map[string]string{
-		// Starter module
+		// Starter module - always needed
 		filepath.Join("starter/src/main/java", pkgPath, "Application.java"): templates.ApplicationMain,
-
-		// Common module
-		filepath.Join("common/src/main/java", pkgPath, "common/response/Result.java"):         templates.ResultClass,
-		filepath.Join("common/src/main/java", pkgPath, "common/exception/BusinessException.java"): templates.BusinessExceptionClass,
-
-		// Adapter-Rest module
-		filepath.Join("adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/controller/HealthController.java"): templates.HealthControllerClass,
 	}
 
 	for path, template := range files {
@@ -204,6 +209,90 @@ func generateGitIgnore(config *ProjectConfig) error {
 	return utils.WriteFile(filepath.Join(config.OutputDir, ".gitignore"), templates.GitIgnore)
 }
 
+// generateDemoCodeForProject generates demo code as part of project generation
+func generateDemoCodeForProject(config *ProjectConfig) error {
+	replacements := config.GetReplacements()
+	baseDir := config.OutputDir
+	pkgPath := config.PackagePath
+
+	// Generate Common layer
+	commonFiles := map[string]string{
+		filepath.Join(baseDir, "common/src/main/java", pkgPath, "common/response/Result.java"):         templates.ResultClass,
+		filepath.Join(baseDir, "common/src/main/java", pkgPath, "common/exception/BusinessException.java"): templates.BusinessExceptionClass,
+		filepath.Join(baseDir, "common/src/main/java", pkgPath, "common/constant/ErrorCode.java"):      templates.ErrorCodeClass,
+	}
+
+	// Generate Domain layer
+	domainFiles := map[string]string{
+		filepath.Join(baseDir, "domain/src/main/java", pkgPath, "domain/model/User.java"):           templates.UserEntity,
+		filepath.Join(baseDir, "domain/src/main/java", pkgPath, "domain/repository/UserRepository.java"): templates.UserRepository,
+		filepath.Join(baseDir, "domain/src/main/java", pkgPath, "domain/service/UserDomainService.java"): templates.UserDomainService,
+		filepath.Join(baseDir, "domain/src/main/java", pkgPath, "domain/event/UserCreatedEvent.java"): templates.UserCreatedEvent,
+	}
+
+	// Generate Infrastructure layer
+	infrastructureFiles := map[string]string{
+		filepath.Join(baseDir, "infrastructure/src/main/java", pkgPath, "infrastructure/persistence/dataobject/UserDO.java"): templates.UserDO,
+		filepath.Join(baseDir, "infrastructure/src/main/java", pkgPath, "infrastructure/persistence/mapper/UserMapper.java"): templates.UserMapper,
+		filepath.Join(baseDir, "infrastructure/src/main/java", pkgPath, "infrastructure/persistence/impl/UserRepositoryImpl.java"): templates.UserRepositoryImpl,
+		filepath.Join(baseDir, "infrastructure/src/main/resources/db/migration/V1__create_user_table.sql"): templates.UserTableSQL,
+	}
+
+	// Generate Application layer
+	applicationFiles := map[string]string{
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/dto/UserDTO.java"):              templates.UserDTO,
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/dto/CreateUserCommand.java"):    templates.CreateUserCommand,
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/dto/UpdateUserCommand.java"):    templates.UpdateUserCommand,
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/assembler/UserAssembler.java"): templates.UserAssembler,
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/service/UserService.java"):     templates.UserService,
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/executor/RegisterUserExecutor.java"): templates.RegisterUserExecutor,
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/listener/UserEventListener.java"): templates.UserEventListener,
+	}
+
+	// Generate Adapter layer
+	adapterFiles := map[string]string{
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/request/CreateUserRequest.java"):           templates.CreateUserRequest,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/request/UpdateUserRequest.java"):           templates.UpdateUserRequest,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/response/UserResponseVO.java"):             templates.UserResponseVO,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/assembler/UserControllerAssembler.java"):   templates.UserControllerAssembler,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/assembler/ResponseVOAssembler.java"):       templates.ResponseVOAssembler,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/filter/LoggingFilter.java"):                templates.LoggingFilter,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/interceptor/AuthInterceptor.java"):         templates.AuthInterceptor,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/config/WebMvcConfig.java"):                 templates.WebMvcConfig,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/advice/GlobalExceptionHandler.java"):       templates.GlobalExceptionHandler,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/controller/UserController.java"):           templates.UserController,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/controller/HealthController.java"):         templates.HealthControllerClass,
+	}
+
+	// Combine all files
+	allFiles := make(map[string]string)
+	for k, v := range commonFiles {
+		allFiles[k] = v
+	}
+	for k, v := range domainFiles {
+		allFiles[k] = v
+	}
+	for k, v := range infrastructureFiles {
+		allFiles[k] = v
+	}
+	for k, v := range applicationFiles {
+		allFiles[k] = v
+	}
+	for k, v := range adapterFiles {
+		allFiles[k] = v
+	}
+
+	// Write all files
+	for path, template := range allFiles {
+		content := utils.ReplacePlaceholders(template, replacements)
+		if err := utils.WriteFile(path, content); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // PrintGenerationSummary prints a summary after project generation
 func PrintGenerationSummary(config *ProjectConfig) {
 	fmt.Println()
@@ -213,18 +302,23 @@ func PrintGenerationSummary(config *ProjectConfig) {
 	fmt.Println()
 	utils.PrintInfo(fmt.Sprintf("项目位置: %s", config.OutputDir))
 	fmt.Println()
-	utils.PrintInfo("已生成的基础代码：")
+	utils.PrintInfo("已生成完整的示例代码：")
 	fmt.Println("  ✅ Application主类（启动类）")
-	fmt.Println("  ✅ Result统一响应封装")
-	fmt.Println("  ✅ BusinessException业务异常")
-	fmt.Println("  ✅ HealthController健康检查接口")
+	fmt.Println("  ✅ Common层：Result、BusinessException、ErrorCode")
+	fmt.Println("  ✅ Domain层：User实体、UserRepository接口")
+	fmt.Println("  ✅ Infrastructure层：UserDO、UserMapper、UserRepositoryImpl")
+	fmt.Println("  ✅ Application层：UserDTO、UserService、UserAssembler")
+	fmt.Println("  ✅ Adapter层：UserController、Request/Response、ExceptionHandler")
+	fmt.Println("  ✅ 数据库脚本：V1__create_user_table.sql")
 	fmt.Println()
 	utils.PrintInfo("后续步骤:")
 	fmt.Printf("  1. cd %s\n", config.OutputDir)
-	fmt.Println("  2. (可选) 运行 phjvgen demo 生成完整CRUD示例")
-	fmt.Println("  3. mvn clean install")
-	fmt.Println("  4. java --enable-preview -jar starter/target/starter-*.jar")
-	fmt.Println("  5. 测试: curl http://localhost:8080/api/health")
+	fmt.Println("  2. 创建数据库并配置连接（starter/src/main/resources/application-dev.yml）")
+	fmt.Println("  3. 执行数据库脚本：infrastructure/src/main/resources/db/migration/V1__create_user_table.sql")
+	fmt.Println("  4. mvn clean install")
+	fmt.Println("  5. java --enable-preview -jar starter/target/starter-*.jar")
+	fmt.Println("  6. 测试健康检查: curl http://localhost:8080/api/health")
+	fmt.Println("  7. 测试创建用户: curl -X POST http://localhost:8080/api/users -H 'Content-Type: application/json' -d '{\"username\":\"test\",\"email\":\"test@example.com\"}'")
 	fmt.Println()
 	utils.PrintInfo("添加新模块:")
 	fmt.Println("  phjvgen add <模块名>")

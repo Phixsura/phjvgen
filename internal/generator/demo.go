@@ -11,17 +11,24 @@ import (
 )
 
 // GenerateDemoCode generates full CRUD demo code for the User entity
+// It supports running from any directory by searching for the project root
 func GenerateDemoCode() error {
-	// Check if we're in project root
-	if !utils.FileExists("pom.xml") || !utils.DirExists("domain") || !utils.DirExists("application") {
-		return fmt.Errorf("请在项目根目录运行此命令")
+	// Find project root by searching for pom.xml
+	projectRoot, err := findProjectRoot()
+	if err != nil {
+		return fmt.Errorf("未找到项目根目录: %w\n提示: 请确保在包含pom.xml的项目目录或其子目录中运行此命令", err)
 	}
 
+	utils.PrintInfo(fmt.Sprintf("项目根目录: %s", projectRoot))
+
 	// Extract project info from pom.xml
-	config, err := extractProjectInfoFromPOM()
+	config, err := extractProjectInfoFromPOM(projectRoot)
 	if err != nil {
 		return err
 	}
+
+	// Set output dir to project root
+	config.OutputDir = projectRoot
 
 	utils.PrintInfo(fmt.Sprintf("Package: %s", config.PackageName))
 	fmt.Println()
@@ -85,14 +92,48 @@ func GenerateDemoCode() error {
 	return nil
 }
 
+// findProjectRoot searches for the project root containing pom.xml
+// It starts from current directory and walks up the tree
+func findProjectRoot() (string, error) {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	// Check current directory and parent directories
+	dir := currentDir
+	for {
+		pomPath := filepath.Join(dir, "pom.xml")
+		if utils.FileExists(pomPath) {
+			// Verify it's a valid project structure
+			if utils.DirExists(filepath.Join(dir, "domain")) ||
+			   utils.DirExists(filepath.Join(dir, "common")) ||
+			   utils.DirExists(filepath.Join(dir, "application")) {
+				return dir, nil
+			}
+		}
+
+		// Go up one directory
+		parentDir := filepath.Dir(dir)
+		if parentDir == dir {
+			// Reached root directory
+			break
+		}
+		dir = parentDir
+	}
+
+	return "", fmt.Errorf("未找到包含pom.xml和项目模块的目录")
+}
+
 func generateCommonCode(config *ProjectConfig) error {
 	replacements := config.GetReplacements()
 	pkgPath := config.PackagePath
+	baseDir := config.OutputDir
 
 	files := map[string]string{
-		filepath.Join("common/src/main/java", pkgPath, "common/response/Result.java"):         templates.ResultClass,
-		filepath.Join("common/src/main/java", pkgPath, "common/exception/BusinessException.java"): templates.BusinessExceptionClass,
-		filepath.Join("common/src/main/java", pkgPath, "common/constant/ErrorCode.java"):      templates.ErrorCodeClass,
+		filepath.Join(baseDir, "common/src/main/java", pkgPath, "common/response/Result.java"):         templates.ResultClass,
+		filepath.Join(baseDir, "common/src/main/java", pkgPath, "common/exception/BusinessException.java"): templates.BusinessExceptionClass,
+		filepath.Join(baseDir, "common/src/main/java", pkgPath, "common/constant/ErrorCode.java"):      templates.ErrorCodeClass,
 	}
 
 	for path, template := range files {
@@ -108,10 +149,17 @@ func generateCommonCode(config *ProjectConfig) error {
 func generateDomainCode(config *ProjectConfig) error {
 	replacements := config.GetReplacements()
 	pkgPath := config.PackagePath
+	baseDir := config.OutputDir
 
 	files := map[string]string{
-		filepath.Join("domain/src/main/java", pkgPath, "domain/model/User.java"):           templates.UserEntity,
-		filepath.Join("domain/src/main/java", pkgPath, "domain/repository/UserRepository.java"): templates.UserRepository,
+		// Model
+		filepath.Join(baseDir, "domain/src/main/java", pkgPath, "domain/model/User.java"):           templates.UserEntity,
+		// Repository
+		filepath.Join(baseDir, "domain/src/main/java", pkgPath, "domain/repository/UserRepository.java"): templates.UserRepository,
+		// Domain Service
+		filepath.Join(baseDir, "domain/src/main/java", pkgPath, "domain/service/UserDomainService.java"): templates.UserDomainService,
+		// Event
+		filepath.Join(baseDir, "domain/src/main/java", pkgPath, "domain/event/UserCreatedEvent.java"): templates.UserCreatedEvent,
 	}
 
 	for path, template := range files {
@@ -127,12 +175,13 @@ func generateDomainCode(config *ProjectConfig) error {
 func generateInfrastructureCode(config *ProjectConfig) error {
 	replacements := config.GetReplacements()
 	pkgPath := config.PackagePath
+	baseDir := config.OutputDir
 
 	files := map[string]string{
-		filepath.Join("infrastructure/src/main/java", pkgPath, "infrastructure/persistence/dataobject/UserDO.java"): templates.UserDO,
-		filepath.Join("infrastructure/src/main/java", pkgPath, "infrastructure/persistence/mapper/UserMapper.java"): templates.UserMapper,
-		filepath.Join("infrastructure/src/main/java", pkgPath, "infrastructure/persistence/impl/UserRepositoryImpl.java"): templates.UserRepositoryImpl,
-		"infrastructure/src/main/resources/db/migration/V1__create_user_table.sql": templates.UserTableSQL,
+		filepath.Join(baseDir, "infrastructure/src/main/java", pkgPath, "infrastructure/persistence/dataobject/UserDO.java"): templates.UserDO,
+		filepath.Join(baseDir, "infrastructure/src/main/java", pkgPath, "infrastructure/persistence/mapper/UserMapper.java"): templates.UserMapper,
+		filepath.Join(baseDir, "infrastructure/src/main/java", pkgPath, "infrastructure/persistence/impl/UserRepositoryImpl.java"): templates.UserRepositoryImpl,
+		filepath.Join(baseDir, "infrastructure/src/main/resources/db/migration/V1__create_user_table.sql"): templates.UserTableSQL,
 	}
 
 	for path, template := range files {
@@ -148,13 +197,21 @@ func generateInfrastructureCode(config *ProjectConfig) error {
 func generateApplicationCode(config *ProjectConfig) error {
 	replacements := config.GetReplacements()
 	pkgPath := config.PackagePath
+	baseDir := config.OutputDir
 
 	files := map[string]string{
-		filepath.Join("application/application-user/src/main/java", pkgPath, "application/user/dto/UserDTO.java"):              templates.UserDTO,
-		filepath.Join("application/application-user/src/main/java", pkgPath, "application/user/dto/CreateUserCommand.java"):    templates.CreateUserCommand,
-		filepath.Join("application/application-user/src/main/java", pkgPath, "application/user/dto/UpdateUserCommand.java"):    templates.UpdateUserCommand,
-		filepath.Join("application/application-user/src/main/java", pkgPath, "application/user/assembler/UserAssembler.java"): templates.UserAssembler,
-		filepath.Join("application/application-user/src/main/java", pkgPath, "application/user/service/UserService.java"):     templates.UserService,
+		// DTO
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/dto/UserDTO.java"):              templates.UserDTO,
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/dto/CreateUserCommand.java"):    templates.CreateUserCommand,
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/dto/UpdateUserCommand.java"):    templates.UpdateUserCommand,
+		// Assembler
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/assembler/UserAssembler.java"): templates.UserAssembler,
+		// Service
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/service/UserService.java"):     templates.UserService,
+		// Executor
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/executor/RegisterUserExecutor.java"): templates.RegisterUserExecutor,
+		// Listener
+		filepath.Join(baseDir, "application/application-user/src/main/java", pkgPath, "application/user/listener/UserEventListener.java"): templates.UserEventListener,
 	}
 
 	for path, template := range files {
@@ -170,13 +227,26 @@ func generateApplicationCode(config *ProjectConfig) error {
 func generateAdapterCode(config *ProjectConfig) error {
 	replacements := config.GetReplacements()
 	pkgPath := config.PackagePath
+	baseDir := config.OutputDir
 
 	files := map[string]string{
-		filepath.Join("adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/request/CreateUserRequest.java"):           templates.CreateUserRequest,
-		filepath.Join("adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/request/UpdateUserRequest.java"):           templates.UpdateUserRequest,
-		filepath.Join("adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/advice/GlobalExceptionHandler.java"):       templates.GlobalExceptionHandler,
-		filepath.Join("adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/controller/UserController.java"):           templates.UserController,
-		filepath.Join("adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/controller/HealthController.java"):         templates.HealthControllerClass,
+		// Request
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/request/CreateUserRequest.java"):           templates.CreateUserRequest,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/request/UpdateUserRequest.java"):           templates.UpdateUserRequest,
+		// Response VO
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/response/UserResponseVO.java"):             templates.UserResponseVO,
+		// Assembler
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/assembler/UserControllerAssembler.java"):   templates.UserControllerAssembler,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/assembler/ResponseVOAssembler.java"):       templates.ResponseVOAssembler,
+		// Filter & Interceptor
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/filter/LoggingFilter.java"):                templates.LoggingFilter,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/interceptor/AuthInterceptor.java"):         templates.AuthInterceptor,
+		// Config
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/config/WebMvcConfig.java"):                 templates.WebMvcConfig,
+		// Advice & Controller
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/advice/GlobalExceptionHandler.java"):       templates.GlobalExceptionHandler,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/controller/UserController.java"):           templates.UserController,
+		filepath.Join(baseDir, "adapter/adapter-rest/src/main/java", pkgPath, "adapter/rest/controller/HealthController.java"):         templates.HealthControllerClass,
 	}
 
 	for path, template := range files {
@@ -192,14 +262,16 @@ func generateAdapterCode(config *ProjectConfig) error {
 func generateStarterCode(config *ProjectConfig) error {
 	replacements := config.GetReplacements()
 	pkgPath := config.PackagePath
+	baseDir := config.OutputDir
 
 	content := utils.ReplacePlaceholders(templates.ApplicationMain, replacements)
-	return utils.WriteFile(filepath.Join("starter/src/main/java", pkgPath, "Application.java"), content)
+	return utils.WriteFile(filepath.Join(baseDir, "starter/src/main/java", pkgPath, "Application.java"), content)
 }
 
-func extractProjectInfoFromPOM() (*ProjectConfig, error) {
-	// Read pom.xml
-	content, err := os.ReadFile("pom.xml")
+func extractProjectInfoFromPOM(projectRoot string) (*ProjectConfig, error) {
+	// Read pom.xml from project root
+	pomPath := filepath.Join(projectRoot, "pom.xml")
+	content, err := os.ReadFile(pomPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read pom.xml: %w", err)
 	}
@@ -231,7 +303,7 @@ func extractProjectInfoFromPOM() (*ProjectConfig, error) {
 		Version:     version,
 		PackageName: packageName,
 		PackagePath: packagePath,
-		OutputDir:   ".",
+		OutputDir:   projectRoot,
 	}, nil
 }
 

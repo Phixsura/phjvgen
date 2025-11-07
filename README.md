@@ -9,7 +9,7 @@
 - **Maven 多模块**：自动生成标准的 Maven 多模块项目
 - **Spring Boot 4.0**：支持最新的 Spring Boot 4.0.0-RC1
 - **Java 25 LTS**：使用 Java 25 的最新特性
-- **完整示例**：可选生成完整的 CRUD 示例代码
+- **完整示例**：默认包含完整的 CRUD 示例代码
 - **模块化扩展**：轻松添加新的业务模块
 
 ## 安装
@@ -43,7 +43,7 @@ source ~/.zshrc
 
 ### 生成新项目
 
-交互式生成新项目：
+交互式生成新项目（包含完整 CRUD 示例代码）：
 
 ```bash
 phjvgen generate
@@ -52,9 +52,9 @@ phjvgen gen
 phjvgen g
 ```
 
-### 生成示例项目
+### 快速生成示例项目
 
-快速生成预配置的示例项目：
+快速生成预配置的示例项目（包含完整 CRUD 示例代码）：
 
 ```bash
 phjvgen example
@@ -65,21 +65,12 @@ phjvgen example
 - Artifact ID: demo-app
 - Version: 1.0.0
 
-### 生成 CRUD 示例代码
-
-在现有项目中生成完整的 User 模块 CRUD 示例：
-
-```bash
-cd your-project
-phjvgen demo
-```
-
-这会生成：
-- Domain 层：User 实体、UserRepository 接口
-- Infrastructure 层：UserDO、UserMapper、UserRepositoryImpl
-- Application 层：UserDTO、UserService、UserAssembler、Commands
-- Adapter 层：UserController、Request/Response、全局异常处理
-- 数据库脚本：用户表创建 SQL
+生成的项目包含完整的 User 模块 CRUD 示例，涵盖所有架构层：
+- **Common 层**：Result、BusinessException、ErrorCode
+- **Domain 层**：User 实体、UserRepository 接口、UserDomainService、UserCreatedEvent
+- **Infrastructure 层**：UserDO、UserMapper、UserRepositoryImpl、数据库脚本
+- **Application 层**：UserDTO、Commands、UserService、UserAssembler、RegisterUserExecutor、UserEventListener
+- **Adapter 层**：UserController、Request/Response VO、ResponseVOAssembler、LoggingFilter、AuthInterceptor、WebMvcConfig、GlobalExceptionHandler
 
 ### 添加新的业务模块
 
@@ -171,14 +162,7 @@ Description: My awesome application
 Output Directory: ./my-app
 ```
 
-### 2. 添加 CRUD 示例（可选）
-
-```bash
-cd my-app
-phjvgen demo
-```
-
-### 3. 配置数据库
+### 2. 配置数据库
 
 编辑 `starter/src/main/resources/application-dev.yml`：
 
@@ -190,7 +174,7 @@ spring:
     password: your_password
 ```
 
-### 4. 创建数据库并执行 SQL（如果生成了 demo）
+### 3. 创建数据库并执行 SQL
 
 ```bash
 mysql -u root -p
@@ -199,7 +183,7 @@ mysql -u root -p
 > source infrastructure/src/main/resources/db/migration/V1__create_user_table.sql;
 ```
 
-### 5. 构建和运行
+### 4. 构建和运行
 
 ```bash
 # 构建项目
@@ -213,7 +197,7 @@ curl http://localhost:8080/api/health
 curl http://localhost:8080/api/users
 ```
 
-### 6. 添加新模块
+### 5. 添加新模块
 
 ```bash
 # 添加支付模块
@@ -248,7 +232,6 @@ phjvgen/
 ├── cmd/                        # Cobra 命令定义
 │   ├── root.go                # 根命令
 │   ├── generate.go            # generate 命令
-│   ├── demo.go                # demo 命令
 │   ├── add.go                 # add 命令
 │   ├── example.go             # example 命令
 │   ├── install.go             # install 命令
@@ -256,8 +239,8 @@ phjvgen/
 ├── internal/
 │   ├── generator/             # 生成器逻辑
 │   │   ├── config.go         # 配置管理
-│   │   ├── project.go        # 项目生成
-│   │   ├── demo.go           # CRUD 示例生成
+│   │   ├── project.go        # 项目生成（包含完整示例）
+│   │   ├── demo.go           # CRUD 示例生成（被 project.go 调用）
 │   │   └── module.go         # 模块添加
 │   ├── templates/             # 模板文件
 │   │   ├── pom.go            # POM 模板
@@ -324,10 +307,10 @@ go test -v ./...
 
 | Shell 脚本 | Go 实现 | 说明 |
 |-----------|---------|------|
-| generate-project.sh | `phjvgen generate` | 生成项目 |
-| generate-demo-code.sh | `phjvgen demo` | 生成 CRUD 示例 |
+| generate-project.sh | `phjvgen generate` | 生成项目（包含完整示例） |
+| generate-demo-code.sh | 已合并到 generate/example | 现在默认包含在项目生成中 |
 | add-application-module.sh | `phjvgen add` | 添加模块 |
-| example.sh | `phjvgen example` | 生成示例项目 |
+| example.sh | `phjvgen example` | 生成示例项目（包含完整示例） |
 | install.sh | `phjvgen install` | 安装到系统 |
 
 ## 常见问题

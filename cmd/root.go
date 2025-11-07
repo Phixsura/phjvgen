@@ -18,10 +18,9 @@ var rootCmd = &cobra.Command{
   - Spring Boot 4.0 配置
 
 使用示例:
-  phjvgen generate         # 生成新项目
-  phjvgen demo             # 生成完整 CRUD 示例
-  phjvgen add payment      # 添加新业务模块
-  phjvgen example          # 快速生成示例项目`,
+  phjvgen generate         # 生成新项目（包含完整示例代码）
+  phjvgen example          # 快速生成示例项目（包含完整示例代码）
+  phjvgen add payment      # 添加新业务模块`,
 }
 
 // Execute runs the root command
